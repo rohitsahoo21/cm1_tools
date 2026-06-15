@@ -33,7 +33,17 @@ _JOB_DELAY = 0
 # CM1 result assets returned by job_plot. Paste your hosted PNG URLs here.
 _REPORT_URL = ""
 _FIGURE_URLS = [
-    # e.g. "https://i.postimg.cc/XXXXXXXX/intensity_timeseries.png",
+    "https://i.postimg.cc/L5ztYZLS/energy-budget-comparison.png",
+    "https://i.postimg.cc/MHy7MjVH/intensity-anomalies.png",
+    "https://i.postimg.cc/3NgX4Dmd/intensity-comparison.png",
+    "https://i.postimg.cc/HnQwc7Xr/moisture-budget-comparison.png",
+    "https://i.postimg.cc/rsS10txz/phase-timing-summary.png",
+    "https://i.postimg.cc/BbxTL1HT/rain-train-comparison.png",
+    "https://i.postimg.cc/brQxD2k9/stability-cape-cin-anomalies.png",
+    "https://i.postimg.cc/3NgX4DmC/stability-cape-cin-comparison.png",
+    "https://i.postimg.cc/2y4QbBhx/structure-anomalies.png",
+    "https://i.postimg.cc/KcLrsCVV/structure-comparison.png",
+    "https://i.postimg.cc/y69Xr25t/vorticity-levels-comparison.png",
 ]
 
 
