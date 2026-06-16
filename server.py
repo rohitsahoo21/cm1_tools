@@ -1,13 +1,16 @@
 """Test MCP server for CM1 experiment job management.
 
-Mirrors the production CM1 Temporal job-management server so the closed-loop
-agents can run end to end WITHOUT a real ~2-hour CM1 run:
+Mirrors the production CM1 job-management server so the closed-loop agents run
+end to end WITHOUT the HPC:
 - Stage 4 calls job_submit to queue an experiment batch.
-- Stage 5 (Experiment Analysis Agent) calls job_status to poll progress and
-  job_plot to fetch the result figures.
+- Stage 5 (Experiment Analysis Agent) calls code_submit to ship the generated
+  plot module, then job_status / job_plot to poll and fetch the figures.
 
-Same tool spec as production — point the agent's CM1_MCP_URL at this server,
-demo the loop, then swap the URL back to production with no code change.
+This is a MOCK. It does NOT run the harness — there is no experiment data,
+harness, or scientific-python env on the server. code_submit just *accepts*
+the module (acknowledges receipt) and job_plot returns the preconfigured
+_FIGURE_URLS. In production, code_submit would run cm1_harness.py on the HPC
+where the data + harness live and job_plot would return the figures it made.
 
 Deploy (FastMCP Cloud):  fastmcp deploy server.py:mcp --name cm1-job-management
 Run locally:             fastmcp run server.py:mcp
@@ -24,26 +27,26 @@ from fastmcp import FastMCP
 
 mcp = FastMCP("cm1-job-management")
 
-# In-memory job store (resets on server restart).
+# In-memory stores (reset on restart).
 _JOBS: dict[str, dict] = {}
+_SUBMITTED: dict[str, int] = {}   # job_id -> length of code received (proof of receipt)
 
 # Seconds a job "runs" before job_status flips to completed (0 = instant).
 _JOB_DELAY = 0
 
-# CM1 result assets returned by job_plot. Paste your hosted PNG URLs here.
+# CM1 result figures returned by job_plot. Paste your hosted PNG URLs here —
+# these should match the experiment/hypothesis being demoed.
 _REPORT_URL = ""
 _FIGURE_URLS = [
-    "https://i.postimg.cc/L5ztYZLS/energy-budget-comparison.png",
-    "https://i.postimg.cc/MHy7MjVH/intensity-anomalies.png",
-    "https://i.postimg.cc/3NgX4Dmd/intensity-comparison.png",
-    "https://i.postimg.cc/HnQwc7Xr/moisture-budget-comparison.png",
-    "https://i.postimg.cc/rsS10txz/phase-timing-summary.png",
-    "https://i.postimg.cc/BbxTL1HT/rain-train-comparison.png",
-    "https://i.postimg.cc/brQxD2k9/stability-cape-cin-anomalies.png",
-    "https://i.postimg.cc/3NgX4DmC/stability-cape-cin-comparison.png",
-    "https://i.postimg.cc/2y4QbBhx/structure-anomalies.png",
-    "https://i.postimg.cc/KcLrsCVV/structure-comparison.png",
-    "https://i.postimg.cc/y69Xr25t/vorticity-levels-comparison.png",
+    "https://i.postimg.cc/fygQS4Rc/energy-budget-timeseries.png",
+    "https://i.postimg.cc/1RWQjFrP/intensity-anomalies.png",
+    "https://i.postimg.cc/c1DSb3BW/intensity-timeseries.png",
+    "https://i.postimg.cc/L4ypbP3H/moisture-budget-timeseries.png",
+    "https://i.postimg.cc/pV0H6jJM/phase-timing-comparison.png",
+    "https://i.postimg.cc/Y2XHsFz0/structure-anomalies.png",
+    "https://i.postimg.cc/Kc92HTD4/structure-timeseries.png",
+    "https://i.postimg.cc/2jHDKW76/surface-flux-anomalies.png",
+    "https://i.postimg.cc/ryhkP4NK/surface-flux-timeseries.png",
 ]
 
 
@@ -70,6 +73,24 @@ def job_submit(payload: dict) -> str:
 
 
 @mcp.tool()
+def code_submit(code: str, job_id: str = "default", input_dir: str = "") -> str:
+    """Accept the generated plot module (MOCK — does not execute it).
+
+    The real (HPC) endpoint would write the module and run cm1_harness.py on
+    the experiment data. Here we just acknowledge receipt; job_plot returns the
+    preconfigured _FIGURE_URLS. Reports figures_produced = len(_FIGURE_URLS) so
+    the caller's "submitted, N figures" message matches what job_plot returns.
+    """
+    _SUBMITTED[job_id] = len(code or "")
+    return json.dumps({
+        "job_id": job_id,
+        "status": "completed",
+        "figures_produced": len(_FIGURE_URLS),
+        "note": "mock — module accepted but not executed; figures are the preconfigured set",
+    })
+
+
+@mcp.tool()
 def job_status(job_id: str) -> str:
     """Return 'running' until _JOB_DELAY seconds elapse, then 'completed'."""
     job = _JOBS.get(job_id)
@@ -90,21 +111,15 @@ def job_status(job_id: str) -> str:
 
 @mcp.tool()
 def job_plot(job_id: str, workspace_name: str = "", user_name: str = "") -> str:
-    """Get the CM1 figure URLs (and report) for a completed job.
+    """Get the CM1 figure URLs (and report) for a job.
 
-    Args:
-        job_id: The job to fetch plots for.
-        workspace_name: Workspace name (production uses it to locate outputs).
-        user_name: User name (production uses it for auth/routing).
-
-    In production this reads the experiment output directory / object storage.
-    For this test server it returns the URLs in _FIGURE_URLS.
+    MOCK: returns the preconfigured _FIGURE_URLS. In production this would
+    return the figures the harness produced from the submitted module.
     """
-    return json.dumps({
-        "job_id": job_id,
-        "report_url": _REPORT_URL,
-        "figures": _FIGURE_URLS,
-    })
+    result = {"job_id": job_id, "figures": _FIGURE_URLS}
+    if _REPORT_URL:
+        result["report_url"] = _REPORT_URL
+    return json.dumps(result)
 
 
 @mcp.tool()
